@@ -1,0 +1,15 @@
+{
+  "version": "2",
+  "remote": {},
+  "npm": {
+    "specifiers": {
+      "fp-ts": "fp-ts@2.13.1"
+    },
+    "packages": {
+      "fp-ts@2.13.1": {
+        "integrity": "sha512-0eu5ULPS2c/jsa1lGFneEFFEdTbembJv8e4QKXeVJ3lm/5hyve06dlKZrpxmMwJt6rYen7sxmHHK2CLaXvWuWQ==",
+        "dependencies": {}
+      }
+    }
+  }
+}
