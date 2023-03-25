@@ -6,6 +6,8 @@ const PLAYER_WIDTH = 200;
 const PLAYER_HEIGHT = 200;
 const ENEMY_WIDTH = 70;
 const ENEMY_HEIGHT = 70;
+const PROJECTILE_WIDTH = 5;
+const PROJECTILE_HEIGHT = 10;
 
 // type Weapon = {
 //     name: string;
@@ -15,19 +17,26 @@ const ENEMY_HEIGHT = 70;
 type Coordinates = [number, number];
 
 type Spaceship = {
-	currentCoordinates: Coordinates;
+    width: number; 
+    height: number;   
+    currentCoordinates: Coordinates;
 	// experience: Weapon[];
 	// comboChain: [string, number];
 };
 
 type Enemy = {
-	currentCoordinates: Coordinates;
+    width: number; 
+    height: number;       
+    currentCoordinates: Coordinates;
 	// color: string;
 	// gunType: Weapon[];
 };
 
+// TODO: There is some accumulation of the previous positions of the projectile in the game State. We should fix that
 type Projectile = {
-	currentCoordinates: Coordinates;
+    width: number; 
+    height: number;           
+    currentCoordinates: Coordinates;
 	// color: string;
 	// format: string;
 	// direction: string;
@@ -44,7 +53,9 @@ namespace State {
 }
 
 type Game = {
-	player: Spaceship;
+    // TODO: We should make this as an option to kill the player
+    // player: FP.option.Option<Spaceship>;
+    player: Spaceship;
 	enemies: Enemy[];
 	projectiles: Projectile[];
 	// enemies
@@ -63,7 +74,7 @@ namespace Spaceship {
 
 function fire(state: Game): Game {
 	const { player, projectiles } = state;
-	const p: Projectile = { currentCoordinates: player.currentCoordinates };
+    const p: Projectile = { currentCoordinates: player.currentCoordinates, width: PROJECTILE_WIDTH, height: PROJECTILE_HEIGHT };
 	return { ...state, projectiles: [...projectiles, p] };
 }
 
@@ -74,9 +85,9 @@ function main(): void {
 	const imagePlayer = document.querySelector("#ship") as HTMLImageElement;
 	const imageEnemy = document.querySelector("#enemy") as HTMLImageElement;
 
-	let ex: Spaceship = { currentCoordinates: [10, 10] };
-	let en1: Enemy = { currentCoordinates: [100, 100] };
-	let gameState: Game = { projectiles: [], player: ex, enemies: [en1] };
+    let ex: Spaceship = { currentCoordinates: [10, 10], width: PLAYER_WIDTH, height: PLAYER_HEIGHT };
+    let en1: Enemy = { currentCoordinates: [100, 100], width: ENEMY_WIDTH, height: ENEMY_HEIGHT };
+    let gameState: Game = { projectiles: [], player: ex, enemies: [en1] };
 	let input: FP.option.Option<string> = FP.option.none;
 
 	imagePlayer.addEventListener("load", (e) => {
@@ -96,15 +107,72 @@ function main(): void {
 		gameState = updateProjectiles(gameState);
 		context.drawImage(imagePlayer, gameState.player.currentCoordinates[0], gameState.player.currentCoordinates[1], PLAYER_WIDTH, PLAYER_HEIGHT);
 		gameState = enemyMovement1(time, gameState);
-		console.log(gameState.enemies[0].currentCoordinates);
+		// console.log(gameState.enemies[0].currentCoordinates);
 		context.drawImage(imageEnemy, gameState.enemies[0].currentCoordinates[0], gameState.enemies[0].currentCoordinates[1], ENEMY_WIDTH, ENEMY_HEIGHT);
 		gameState.projectiles.forEach(p => {
 			context.fillStyle = "0xFF0000";
 			context.fillRect(p.currentCoordinates[0], p.currentCoordinates[1], 5, 10);
 		});
-		time += 0.016;
+	    gameState = updatePresence(gameState);
+	    // console.log(gameState.projectiles);
+	    time += 0.016;	    
 	}, 16);
 
+}
+
+// TODO: Review this folding function, because it does not in fact work
+function updatePresence(gameState: Game) : Game {
+    let nextGameState = Object.assign({}, gameState);
+    nextGameState.projectiles = [];
+    console.log(gameState.projectiles)
+    return FP.array.reduce(nextGameState, (acc: Game, projectile: Projectile) => {
+	let shouldRemove = false;
+	if (wasHit(nextGameState.player.currentCoordinates, nextGameState.player.width, nextGameState.player.height, projectile)) {
+	    shouldRemove = true;
+	    console.log("You should have died bud xD");
+	}
+	nextGameState.enemies = FP.array.reduce([], (acc: Enemy[], enemy: Enemy) => {
+	    if (wasHit(enemy.currentCoordinates, enemy.width, enemy.height, projectile)) {
+		shouldRemove = true;
+		console.log("You should have died bud 2 xD");
+		return acc;
+	    }
+	    acc.push(enemy);
+	    return acc;
+	})(nextGameState.enemies);
+	if (!shouldRemove) {
+	    nextGameState.projectiles.push(projectile);
+	}	
+	return nextGameState;
+    })(gameState.projectiles);
+}
+
+function wasHit(current: Coordinates, width: number, height: number, projectile: Projectile): boolean {
+    let pointUpLeftCorner: Coordinates = projectile.currentCoordinates;
+    let pointBottomRightCorner: Coordinates = [projectile.currentCoordinates[0] + projectile.width, projectile.currentCoordinates[1] + projectile.height];
+
+    let entityUpLeftCorner = current;
+    let entityBottomRightCorner: Coordinates = [current[0] + width, current[1] + height];
+    
+    return [pointUpLeftCorner, pointBottomRightCorner].some((point) => {
+	isPointContained(entityUpLeftCorner, entityBottomRightCorner, point);
+    });
+}
+
+function isPointContained(upLeftCorner: Coordinates, bottomRightCorner: Coordinates, point: Coordinates): boolean {
+    let xUpLeftCorner = upLeftCorner[0];
+    let yUpLeftCorner = upLeftCorner[1];
+
+    let xBottomRightCorner = bottomRightCorner[0];
+    let yBottomRightCorner = bottomRightCorner[1];
+
+    let xPoint = point[0];
+    let yPoint = point[1];    
+
+    if (xPoint >= xUpLeftCorner && xPoint <= xBottomRightCorner && yPoint >= yUpLeftCorner && yPoint <= yBottomRightCorner){
+	return true;
+    }
+    return false;
 }
 
 function enemyMovement1(time: number, g: Game): Game {
