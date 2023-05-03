@@ -1,0 +1,13 @@
+#+TITLE: Radiant-ts
+
+A game in typescript inspired by Radiant Silvergun, from Sega Saturn era.
+
+* MVP
+
+- 3 types of enemies with animations
+  * 3 types of attacks
+- 3 types of weapons
+- 1 type of boss
+- Player with animations
+- Scoring system
+- Moving Background
