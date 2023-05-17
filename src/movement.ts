@@ -1,4 +1,4 @@
-import { FP } from "./deps.ts";
+import { FP } from "../deps.ts";
 
 export namespace Common {
     export type Coordinates = [number, number];
@@ -17,8 +17,9 @@ export namespace Common {
     }
     
     export function isPointContained(upLeftCorner: Coordinates, bottomRightCorner: Coordinates, point: Coordinates): boolean {
-	let xUpLeftCorner = upLeftCorner[0];
-	let yUpLeftCorner = upLeftCorner[1];
+	// let xUpLeftCorner = upLeftCorner[0];
+	// let yUpLeftCorner = upLeftCorner[1];
+	const [xUpLeftCorner, yUpLeftCorner] = upLeftCorner;
 	
 	let xBottomRightCorner = bottomRightCorner[0];
 	let yBottomRightCorner = bottomRightCorner[1];
@@ -45,41 +46,51 @@ export namespace Player {
     };
 
     export function create(): Entity {
-	let wp: Weapon.Entity = { name: "Pistol", experience: 15};
-	let e: Entity = { currentCoordinates: [State.INITIAL_X, State.INITIAL_Y], width: WIDTH, height: HEIGHT, weapons: [wp]};
-	return e;
+		let wp: Weapon.Entity = { name: "Pistol", experience: 15};
+		let e: Entity = { currentCoordinates: [State.INITIAL_X, State.INITIAL_Y], width: WIDTH, height: HEIGHT, weapons: [wp]};
+		return e;
     }
     
     export function updateCoordinates(s: Entity, newC: Common.Coordinates): Entity {
-	return { ...s, currentCoordinates: newC };
+		return { ...s, currentCoordinates: newC };
     }
-    
-    export function updateWithAction(optionKey: FP.option.Option<string>, g: State.Game): State.Game {
-	let s = g.player;
-	let xCoordinate = s.currentCoordinates[0];
-	let yCoordinate = s.currentCoordinates[1];
-	return (FP.option.match(
-	    () => { return g; },
-	    (key: string) => {
-		if (key == "ArrowRight") {
-		    xCoordinate += 15;
-		} else if (key == "ArrowDown") {
-		    yCoordinate += 15;
-		} else if (key == "ArrowLeft") {
-		    xCoordinate -= 15;
-		} else if (key == "ArrowUp") {
-		    yCoordinate -= 15;
-		} else if (key == "z") {			    
-		    const newProjectile = Weapon.fire(s.currentCoordinates, s.weapons[0]);
-		    g = { ...g, projectiles: [...g.projectiles, newProjectile] };
-		}
-		return { ...g, player: updateCoordinates(s, [xCoordinate, yCoordinate]) };
-	    }
-	))(optionKey);
-    }
+	
+    // TODO: change "any" by the actual type
+    export function initUpdateWithAction(): any {
+        const fire = throttle(Weapon.fire, 250);
+
+        function updateWithAction(optionKey: FP.option.Option<string>, g: State.Game): State.Game {
+		
+            let s = g.player;
+            let xCoordinate = s.currentCoordinates[0];
+            let yCoordinate = s.currentCoordinates[1];
+            return (FP.option.match(
+                () => { return g; },
+                (key: string) => {
+                if (key == "ArrowRight") {
+                    xCoordinate += 15;
+                } else if (key == "ArrowDown") {
+                    yCoordinate += 15;
+                } else if (key == "ArrowLeft") {
+                    xCoordinate -= 15;
+                } else if (key == "ArrowUp") {
+                    yCoordinate -= 15;
+                } else if (key == "z") {			
+                    const newProjectile = fire(s.currentCoordinates, s.weapons[0], FP.option.none, FP.option.none);
+                    g = { ...g, projectiles: [...g.projectiles, ...newProjectile] };
+                }
+                return { ...g, player: updateCoordinates(s, [xCoordinate, yCoordinate]) };
+                }
+            ))(optionKey);
+        }
+
+        return updateWithAction;
+
+    } 
 
     export const WIDTH = 200;
     export const HEIGHT = 200;
+	
 }
 
 export namespace Enemy {    
@@ -88,14 +99,27 @@ export namespace Enemy {
 	height: number;       
 	currentCoordinates: Common.Coordinates;
 	movement: (time: number, en: Entity) => Entity;
+	timeBetweenShots: number;
+	lastTimeAttack: number;
+	weapon: Weapon.Entity;
 	// color: string;
 	// gunType: Weapon[];
     };
 
-    export function create(): Entity {
-	let en: Entity = { currentCoordinates: [100, 100], width: WIDTH, height: HEIGHT, movement: movement1 };
-	return en;
+    export function create(betweenShots: FP.option.Option<number>): Entity {
+		let wp: Weapon.Entity = { name: "Pistol", experience: 15};
+		let en: Entity = { currentCoordinates: [100, 100], 
+						   width: WIDTH, height: HEIGHT, 
+						   movement: movement1,
+						   timeBetweenShots: FP.option.getOrElse(() => DEFAULT_TIME_BETWEEN_SHOTS)(betweenShots),
+						   weapon: wp,
+						   lastTimeAttack: 0};
+		return en;
     }
+
+	export function attack(coordinates: Common.Coordinates, wp: Weapon.Entity, angle: FP.option.Option<number>, speed: FP.option.Option<number>): Projectile.Entity {
+		return Weapon.fire(coordinates, wp, angle, speed);
+	}
 
     function movement1(time: number, en: Entity): Entity {
 	en.currentCoordinates = [150 * Math.abs(Math.cos(time)) + 100, 75 * Math.cos(time) + 100];
@@ -103,22 +127,54 @@ export namespace Enemy {
     }
     
     function movement2(time: number, e: Entity): Entity {
-	e.currentCoordinates = [350 * Math.abs(Math.cos(time)) + 150, 50 * Math.cos(time) + 50];
-	return e;
+		e.currentCoordinates = [350 * Math.abs(Math.cos(time)) + 150, 50 * Math.cos(time) + 50];
+		return e;
     }
 
+	export const DEFAULT_TIME_BETWEEN_SHOTS = 5;
     export const WIDTH = 70;
     export const HEIGHT = 70;
 }
+
+function throttle(fn: (...args: any[]) => any, delay: number): any {
+	let shouldWait = false;
+  
+	return (...args:any[]) => {
+	  if (shouldWait) return [];
+  
+	  shouldWait = true;
+
+	  setTimeout(() => {
+		shouldWait = false
+	  }, delay);
+
+	  return [fn(...args)];
+	}
+  }
+
+function updateIn(obj: any, keys: string[], value: any): any {
+	if (keys.length === 0) {
+		return value;
+	}
+    
+    const [key, ...nextKeys] = keys;
+
+    return {
+        ...obj,
+        [key]: updateIn(obj[key], nextKeys, value),
+    };
+};
 
 export namespace Weapon {
     export type Entity = {
         name: string;
         experience: number;
     }
-    export function fire(coordinates: Common.Coordinates, wp: Entity): Projectile.Entity {
-	return Projectile.createProjectile(wp, coordinates);
+
+    export function fire(coordinates: Common.Coordinates, wp: Entity, angle: FP.option.Option<number>, speed: FP.option.Option<number>): Projectile.Entity {
+		return Projectile.createProjectile(wp, coordinates, angle, speed);
     }
+	
 }
 
 export namespace Projectile {
@@ -130,25 +186,32 @@ export namespace Projectile {
 	height: number;           
 	currentCoordinates: Common.Coordinates;
 	weaponSource: Weapon.Entity;
+	angle: number;
+	speed: number;
 	// color: string;
 	// format: string;
 	// direction: string;
     };
-
+	
+	// TODO: update this function to take into account speed and angle
     export function incrementCoordinates(p: Entity): Entity {
-	let c = p.currentCoordinates;
-	return { ...p, currentCoordinates: [c[0], c[1] - 10] };
+		let c = p.currentCoordinates;
+		return { ...p, currentCoordinates: [c[0], c[1] - 10] };
     }
 
-    export function createProjectile(weapon: Weapon.Entity, coordinates: Common.Coordinates): Projectile.Entity {
+    export function createProjectile(weapon: Weapon.Entity, coordinates: Common.Coordinates, angle: FP.option.Option<number>, speed: FP.option.Option<number>): Projectile.Entity {
 	const p: Projectile.Entity = { currentCoordinates: [coordinates[0], coordinates[1] - 50],
-				width: WIDTH, height: HEIGHT,
-			        id: projectileCounter, weaponSource: weapon};
+								   width: WIDTH, height: HEIGHT,
+			                       id: projectileCounter, weaponSource: weapon,
+								   angle: FP.option.getOrElse(() => DEFAULT_ANGLE)(angle),
+								   speed: FP.option.getOrElse(() => DEFAULT_SPEED)(speed)};
 	projectileCounter += 1;
 	return p;
     }
 
     let projectileCounter = 0;
+	export const DEFAULT_ANGLE = 0;
+	export const DEFAULT_SPEED = 10;
     export const WIDTH = 5;
     export const HEIGHT = 5;
 }
@@ -178,7 +241,7 @@ export namespace State {
 
     export function initGame(): Game {
 	let p = Player.create();
-	let en = Enemy.create();
+	let en = Enemy.create(FP.option.none);
 	let s = 0;
 	return { projectiles: [], player: p, enemies: [en], score: s };
     }
@@ -221,14 +284,34 @@ export namespace State {
     }
 
     export function updateProjectiles(g: Game): Game {
-	let ps = g.projectiles;
-	return { ...g, projectiles: ps.map(Projectile.incrementCoordinates) };
+		let ps = g.projectiles;
+		return { ...g, projectiles: ps.map(Projectile.incrementCoordinates) };
     }
 
     export function moveEnemies(time: number, g: Game): Game {
-	let es = g.enemies;
-	return { ...g, enemies: es.map((e) => e.movement(time, e))};	
+		let es = g.enemies;
+		return { ...g, enemies: es.map((e) => e.movement(time, e))};	
     }
+
+	export function enemiesAttack(time: number, g: Game): Game {
+		let es = g.enemies;
+		let newProjectiles: Projectile.Entity[] = []
+		let newEnemies: Enemy.Entity[] = es.map(
+			(enemy) => {
+				if (time - enemy.lastTimeAttack >= enemy.timeBetweenShots) {
+					// TODO: calculate angle based on player's position
+					newProjectiles.push(Enemy.attack(enemy.currentCoordinates, enemy.weapon, FP.option.none, FP.option.none));
+					return {
+						...enemy,
+						lastTimeAttack: time
+					};	
+				} else {
+					return enemy;
+				}	
+			});
+		let ps = g.projectiles;
+		return { ...g, enemies: newEnemies, projectiles: [...ps, ...newProjectiles]};	
+	}
     
     export const INITIAL_X = 10;
     export const INITIAL_Y = 10;

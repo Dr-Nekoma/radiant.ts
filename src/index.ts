@@ -1,5 +1,5 @@
 import { State, Player, Enemy } from "./movement.ts";
-import { FP } from "./deps.ts";
+import { FP } from "../deps.ts";
 
 // let throttleFire = throttle(20, fire);
 // function throttle<A, B>(delay: number, func: (arg0: A) => B) {
@@ -11,7 +11,7 @@ import { FP } from "./deps.ts";
 // 	}
 //     };
 // }
-
+	
 
 /**
  * Main game loop function
@@ -25,6 +25,8 @@ import { FP } from "./deps.ts";
  *
  * @beta
  */
+
+const updateWithAction = Player.initUpdateWithAction();
 
 function main(): void {
     
@@ -42,11 +44,14 @@ function main(): void {
     });
 
     let time = 0;
+	let previousTime = 0;
     setInterval(() => {
-	gameState = Player.updateWithAction(input, gameState);
+	gameState = updateWithAction(input, gameState);
 	gameState = State.updateProjectiles(gameState);
 	gameState = State.moveEnemies(time, gameState);
+	gameState = State.enemiesAttack(time, gameState);
 	gameState = State.updateProjectilePresence(gameState);
+	previousTime = time;
 	time += 0.016;	    
 	State.draw(gameState);
     }, 16);

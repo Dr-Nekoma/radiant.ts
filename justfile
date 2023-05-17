@@ -1,5 +1,5 @@
 build:
-	deno bundle --config ./deno.json index.ts > index.js
+	deno bundle --config ./deno.json src/index.ts > index.js
 
 serve:
 	npx serve 
