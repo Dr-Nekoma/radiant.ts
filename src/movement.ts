@@ -2,7 +2,6 @@ import { FP } from "../deps.ts";
 
 export namespace Common {
     export type Coordinates = [number, number];
-
     
     export function wasHit(current: Coordinates, width: number, height: number, projectile: Projectile.Entity): boolean {
 	let pointUpLeftCorner: Coordinates = projectile.currentCoordinates;
@@ -33,7 +32,12 @@ export namespace Common {
 	return false;
     }
 
-
+    // This is a browser not math, that means that we need conversion, a.k.a, +90 xD
+    export function calculateAngle(p1: Coordinates, p2: Coordinates): number {
+	const [x1, y1] = p1;
+	const [x2, y2] = p2;
+	return (Math.atan2(y2 - y1, x2 - x1 ) * ( 180 / Math.PI )) + 90;
+    }
 }
 
 export namespace Player {
@@ -76,7 +80,7 @@ export namespace Player {
                 } else if (key == "ArrowUp") {
                     yCoordinate -= 15;
                 } else if (key == "z") {			
-                    const newProjectile = fire(s.currentCoordinates, s.weapons[0], FP.option.none, FP.option.none);
+                    const newProjectile = fire(s.currentCoordinates, s.weapons[0], FP.option.some(0), FP.option.none);
                     g = { ...g, projectiles: [...g.projectiles, ...newProjectile] };
                 }
                 return { ...g, player: updateCoordinates(s, [xCoordinate, yCoordinate]) };
@@ -108,21 +112,21 @@ export namespace Enemy {
 
     export function create(betweenShots: FP.option.Option<number>): Entity {
 		let wp: Weapon.Entity = { name: "Pistol", experience: 15};
-		let en: Entity = { currentCoordinates: [100, 100], 
-						   width: WIDTH, height: HEIGHT, 
-						   movement: movement1,
-						   timeBetweenShots: FP.option.getOrElse(() => DEFAULT_TIME_BETWEEN_SHOTS)(betweenShots),
-						   weapon: wp,
-						   lastTimeAttack: 0};
+		let en: Entity = { currentCoordinates: [500, 500], 
+				   width: WIDTH, height: HEIGHT, 
+				   movement: movement1,
+				   timeBetweenShots: FP.option.getOrElse(() => DEFAULT_TIME_BETWEEN_SHOTS)(betweenShots),
+				   weapon: wp,
+				   lastTimeAttack: 0};
 		return en;
     }
 
-	export function attack(coordinates: Common.Coordinates, wp: Weapon.Entity, angle: FP.option.Option<number>, speed: FP.option.Option<number>): Projectile.Entity {
-		return Weapon.fire(coordinates, wp, angle, speed);
-	}
+    export function attack(coordinates: Common.Coordinates, wp: Weapon.Entity, angle: FP.option.Option<number>, speed: FP.option.Option<number>): Projectile.Entity {
+	return Weapon.fire(coordinates, wp, angle, speed);
+    }
 
     function movement1(time: number, en: Entity): Entity {
-	en.currentCoordinates = [150 * Math.abs(Math.cos(time)) + 100, 75 * Math.cos(time) + 100];
+	en.currentCoordinates = [150 * Math.abs(Math.cos(time)) + 700, 75 * Math.cos(time) + 700];
 	return en;
     }
     
@@ -131,7 +135,7 @@ export namespace Enemy {
 		return e;
     }
 
-	export const DEFAULT_TIME_BETWEEN_SHOTS = 5;
+    export const DEFAULT_TIME_BETWEEN_SHOTS = 5;
     export const WIDTH = 70;
     export const HEIGHT = 70;
 }
@@ -192,26 +196,26 @@ export namespace Projectile {
 	// format: string;
 	// direction: string;
     };
-	
-	// TODO: update this function to take into account speed and angle
+    
     export function incrementCoordinates(p: Entity): Entity {
-		let c = p.currentCoordinates;
-		return { ...p, currentCoordinates: [c[0], c[1] - 10] };
+	let [x, y] = p.currentCoordinates;
+	let newAngle = (p.angle - 90) * (Math.PI / 180);
+	return { ...p, currentCoordinates: [x + Math.cos(newAngle) * p.speed, y + Math.sin(newAngle) * p.speed] };
     }
 
     export function createProjectile(weapon: Weapon.Entity, coordinates: Common.Coordinates, angle: FP.option.Option<number>, speed: FP.option.Option<number>): Projectile.Entity {
 	const p: Projectile.Entity = { currentCoordinates: [coordinates[0], coordinates[1] - 50],
 								   width: WIDTH, height: HEIGHT,
-			                       id: projectileCounter, weaponSource: weapon,
-								   angle: FP.option.getOrElse(() => DEFAULT_ANGLE)(angle),
-								   speed: FP.option.getOrElse(() => DEFAULT_SPEED)(speed)};
+			               id: projectileCounter, weaponSource: weapon,
+				       angle: FP.option.getOrElse(() => DEFAULT_ANGLE)(angle),
+				       speed: FP.option.getOrElse(() => DEFAULT_SPEED)(speed)};
 	projectileCounter += 1;
 	return p;
     }
 
     let projectileCounter = 0;
-	export const DEFAULT_ANGLE = 0;
-	export const DEFAULT_SPEED = 10;
+    export const DEFAULT_ANGLE = 0;
+    export const DEFAULT_SPEED = 5;
     export const WIDTH = 5;
     export const HEIGHT = 5;
 }
@@ -293,25 +297,25 @@ export namespace State {
 		return { ...g, enemies: es.map((e) => e.movement(time, e))};	
     }
 
-	export function enemiesAttack(time: number, g: Game): Game {
-		let es = g.enemies;
-		let newProjectiles: Projectile.Entity[] = []
-		let newEnemies: Enemy.Entity[] = es.map(
-			(enemy) => {
-				if (time - enemy.lastTimeAttack >= enemy.timeBetweenShots) {
-					// TODO: calculate angle based on player's position
-					newProjectiles.push(Enemy.attack(enemy.currentCoordinates, enemy.weapon, FP.option.none, FP.option.none));
-					return {
-						...enemy,
-						lastTimeAttack: time
-					};	
-				} else {
-					return enemy;
-				}	
-			});
-		let ps = g.projectiles;
-		return { ...g, enemies: newEnemies, projectiles: [...ps, ...newProjectiles]};	
-	}
+    export function enemiesAttack(time: number, g: Game): Game {
+	let es = g.enemies;
+	let newProjectiles: Projectile.Entity[] = []
+	let newEnemies: Enemy.Entity[] = es.map(
+	    (enemy) => {
+		if (time - enemy.lastTimeAttack >= enemy.timeBetweenShots) {
+		    const angle = Common.calculateAngle(enemy.currentCoordinates, g.player.currentCoordinates);
+		    newProjectiles.push(Enemy.attack(enemy.currentCoordinates, enemy.weapon, FP.option.some(angle), FP.option.none));
+		    return {
+			...enemy,
+			lastTimeAttack: time
+		    };	
+		} else {
+		    return enemy;
+		}	
+	    });
+	let ps = g.projectiles;
+	return { ...g, enemies: newEnemies, projectiles: [...ps, ...newProjectiles]};	
+    }
     
     export const INITIAL_X = 10;
     export const INITIAL_Y = 10;
