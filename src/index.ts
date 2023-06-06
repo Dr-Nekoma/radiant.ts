@@ -47,13 +47,15 @@ function main(): void {
 	let previousTime = 0;
     setInterval(() => {
 	gameState = updateWithAction(input, gameState);
-	gameState = State.updateProjectiles(gameState);
-	gameState = State.moveEnemies(time, gameState);
-	gameState = State.enemiesAttack(time, gameState);
-	gameState = State.updateProjectilePresence(gameState);
-	previousTime = time;
-	time += 0.016;	    
-	State.draw(gameState);
+	if (gameState.status == "Going") {
+	    gameState = State.updateProjectiles(gameState);
+	    gameState = State.moveEnemies(time, gameState);
+	    gameState = State.enemiesAttack(time, gameState);
+	    gameState = State.updateProjectilePresence(gameState);	    
+	    previousTime = time;
+	    time += 0.016;	    
+	    State.draw(gameState);
+	}
     }, 16);
 }
 
