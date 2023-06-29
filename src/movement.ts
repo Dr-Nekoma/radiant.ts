@@ -54,18 +54,22 @@ export namespace Common {
 }
 
 export namespace Player {
+
+    export type Movement = "Forward" | "Backward" | "Left" | "Right" | "Stationary";
+    
     export type Entity = {
 	width: number; 
 	height: number;   
 	currentCoordinates: Common.Coordinates;
 	weapons: Weapon.Entity[];
+	currentMovement: Movement;
 	// comboChain: [string, number];
     };
 
     export function create(): Entity {
-		let wp: Weapon.Entity = { name: "Pistol", experience: 15};
-		let e: Entity = { currentCoordinates: [State.INITIAL_X, State.INITIAL_Y], width: WIDTH, height: HEIGHT, weapons: [wp]};
-		return e;
+	let wp: Weapon.Entity = { name: "Pistol", experience: 15};
+	let e: Entity = { currentCoordinates: [State.INITIAL_X, State.INITIAL_Y], width: WIDTH, height: HEIGHT, weapons: [wp], currentMovement: "Stationary"};
+	return e;
     }
     
     export function updateCoordinates(s: Entity, newC: Common.Coordinates): Entity {
@@ -81,18 +85,25 @@ export namespace Player {
             let s = g.player;
             let xCoordinate = s.currentCoordinates[0];
             let yCoordinate = s.currentCoordinates[1];
+	    let currentMovement = s.currentMovement;
             return (FP.option.match(
-                () => { return g; },
+                () => {
+		    return { ...g, currentMovement: "Stationary"};
+		},
                 (key: string) => {
 		    if (g.status == "Going") {
 			if (key == "ArrowRight") {
 			    xCoordinate += 15;
+			    currentMovement = "Right";
 			} else if (key == "ArrowDown") {
 			    yCoordinate += 15;
+			    currentMovement = "Backward";
 			} else if (key == "ArrowLeft") {
 			    xCoordinate -= 15;
+			    currentMovement = "Left";
 			} else if (key == "ArrowUp") {
 			    yCoordinate -= 15;
+			    currentMovement = "Forward";
 			} else if (key == "z") {			
 			    const newProjectile = fire(s.currentCoordinates, s.weapons[0], FP.option.some(0), FP.option.none, "Player");
 			    g = { ...g, projectiles: [...g.projectiles, ...newProjectile] };
@@ -105,14 +116,36 @@ export namespace Player {
 			    g = { ...g, status: "Going" };
 			}
 		    }
-                    return { ...g, player: updateCoordinates(s, [xCoordinate, yCoordinate]) };
+		    let newP = { ...updateCoordinates(s, [xCoordinate, yCoordinate]), currentMovement: currentMovement};
+                    return { ...g, player: newP };
                 }
             ))(optionKey);
         }
 
         return updateWithAction;
 
-    } 
+    }
+
+    export function movementBasedAngle(e: Entity): number {
+	switch(e.currentMovement) { 
+	    case "Forward": { 
+		return 0;
+	    } 
+	    case "Backward": { 
+		return 0;
+	    }
+	    case "Left": {
+		return 5;
+	    }
+	    case "Right": {
+		return -5;
+	    }
+	    // Stationary case
+	    default: {
+		return 0;
+	    } 
+	} 
+    }
 
     export const WIDTH = 200;
     export const HEIGHT = 200;
@@ -274,6 +307,21 @@ export namespace State {
 	return { status: initialStatus, projectiles: [], player: p, enemies: [en], score: s };
     }
 
+    function drawRotatedPlayer(image: CanvasImageSource, x: number, y: number, angle: number) {
+	Configuration.context.save();
+	Configuration.context.translate(x, y);
+	Configuration.context.rotate(angle * Math.PI/180.0);
+	Configuration.context.translate(-x, -y);
+	Configuration.context.drawImage(Configuration.imagePlayer, x, y, Player.WIDTH, Player.HEIGHT);
+	Configuration.context.restore();
+    }
+
+    function drawPlayer(p: Player.Entity, coords: Common.Coordinates) {
+	let angle = Player.movementBasedAngle(p);
+	console.log(angle);
+	drawRotatedPlayer(Configuration.imagePlayer, coords[0], coords[1], angle)
+    }
+    
     export function draw(gameState: Game) {
 	Configuration.context.clearRect(0, 0, Configuration.WIDTH, Configuration.HEIGHT);
 	const playerCoords = Common.normalizeToUpLeft(gameState.player.currentCoordinates, Player.WIDTH, Player.HEIGHT);
@@ -290,8 +338,9 @@ export namespace State {
 	    Configuration.context.fillStyle = "0xFF0000";
 	    Configuration.context.fillRect(p.currentCoordinates[0], p.currentCoordinates[1], 5, 10);
 	});
-	Configuration.context.drawImage(Configuration.imagePlayer, playerCoords[0], playerCoords[1],
-					Player.WIDTH, Player.HEIGHT);
+	drawPlayer(gameState.player, playerCoords);
+	// Configuration.context.drawImage(Configuration.imagePlayer, playerCoords[0], playerCoords[1],
+	// 				Player.WIDTH, Player.HEIGHT);
 	if (globalThis.debug) {
 	    Configuration.context.strokeStyle = "black";
 	    Configuration.context.strokeRect(playerCoords[0], playerCoords[1], Player.WIDTH, Player.HEIGHT);
